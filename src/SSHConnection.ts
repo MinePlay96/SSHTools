@@ -1,13 +1,25 @@
-import { Client } from 'ssh2';
+import { Client, ClientChannel } from 'ssh2';
 import { createServer, Socket } from 'net';
 import { SFTPClient } from './SFTPClient';
 import { SSHForward } from './SSHForward';
 
 export class SSHConnection {
   private _connection: Client;
+  private _parent?: SSHConnection;
 
-  public constructor(connection: Client) {
+  public constructor(connection: Client)
+  public constructor(connection: Client, parent: SSHConnection)
+  public constructor(connection: Client, parent?: SSHConnection) {
     this._connection = connection;
+    this._parent = parent;
+  }
+
+  public close(): void {
+    this._connection.end();
+
+    if (this._parent) {
+      this._parent.close();
+    }
   }
 
   public async sftp(): Promise<SFTPClient> {
@@ -26,34 +38,43 @@ export class SSHConnection {
 
   // TODO: add port check
   // TODO: add incomming and dynamic
-  public async forward(localPort: number, remoteAdress: string, remotePort: number): Promise<SSHForward> {
+  public async forwardPort(localPort: number, remoteAdress: string, remotePort: number): Promise<SSHForward> {
     return new Promise((resolve, reject) => {
       const connections: Array<Socket> = [];
       const server = createServer(serverStream => {
-        // TODO: check if 0.0.0.0 can be used
-        this._connection.forwardOut(
-          '127.0.0.1', localPort, remoteAdress, remotePort, (error, sshStream) => {
-            if (error) {
-              reject(error);
+        this.forwardSocket(remoteAdress, remotePort).then(sshStream => {
 
-              return;
-            }
+          serverStream.pipe(sshStream).pipe(serverStream);
 
-            serverStream.pipe(sshStream).pipe(serverStream);
+          // TODO: find a way without key
+          // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+          const key = connections.push(serverStream) - 1;
 
-            // TODO: find a way without key
-            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-            const key = connections.push(serverStream) - 1;
-
-            sshStream.on('close', () => {
-              // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-              delete connections[key];
-            });
-          }
-        );
+          sshStream.on('close', () => {
+            // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+            delete connections[key];
+          });
+        })
+          .catch(reject);
       }).listen(localPort);
 
       resolve(new SSHForward(server, connections));
+    });
+  }
+
+  public async forwardSocket(dstIP: string, dstPort: number): Promise<ClientChannel> {
+    return new Promise((resolve, reject) => {
+      this._connection.forwardOut(
+        '', 0, dstIP, dstPort, (error, socket) => {
+          if (error) {
+            reject(error);
+
+            return;
+          }
+
+          resolve(socket);
+        }
+      );
     });
   }
 }
