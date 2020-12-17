@@ -1,44 +1,88 @@
+/* eslint-disable no-underscore-dangle */
 import { Client, ConnectConfig } from 'ssh2';
-import { ISSHConnectConfig } from './ISSHConnectConfig';
-import { SSHConnection } from './SSHConnection';
 
-export class SSHClient {
-  private _config: ISSHConnectConfig;
+const LOCAL_FORWARD_PORT = 0;
 
-  public constructor(config: ISSHConnectConfig) {
-    this._config = config;
+interface IConnectConfigHop extends ConnectConfig {
+  through: IConnectConfigHop | ConnectConfig | SSHClient;
+  host: string;
+  port: number;
+}
+
+export class SSHClient extends Client {
+
+  private _parent?: SSHClient;
+  private _childs: Set<SSHClient> = new Set<SSHClient>();
+  private _justHop = false;
+
+  public constructor() {
+    super();
+
+    this.on('close', this._internalOnClose);
   }
 
-  public async connect(): Promise<SSHConnection>;
-  public async connect(parent: SSHConnection): Promise<SSHConnection>;
-  public async connect(parent?: SSHConnection): Promise<SSHConnection> {
+  public connect(config: IConnectConfigHop | ConnectConfig): void {
 
-    const client = new Client();
-    const clientConfig: ConnectConfig = { ...this._config };
+    if (!('through' in config)) {
+      super.connect(config);
 
-    // create the hop connection and call the this function with the connection
-    if (this._config.hop && !parent) {
-      const temp = new SSHClient(this._config.hop);
-
-      return this.connect(await temp.connect());
+      return;
     }
 
-    if (parent) {
-      clientConfig.sock = await parent.forwardSocket(this._config.host, this._config.port);
-      delete clientConfig.host;
-      delete clientConfig.port;
-    }
+    if (config.through instanceof SSHClient) {
+      this.connectThrough(config.through, config);
+    } else {
+      const parent = new SSHClient();
 
-    return new Promise((resolve, reject) => {
-      client.connect(clientConfig);
-      client.on('ready', () => {
-        if (parent) {
-          resolve(new SSHConnection(client, parent));
-        } else {
-          resolve(new SSHConnection(client));
-        }
+      parent._justHop = true;
+      parent.connect(config.through);
+      parent.on('ready', () => {
+        this.connectThrough(parent, config);
       });
-      client.on('error', reject);
+    }
+  }
+
+  public connectThrough(parent: SSHClient, config: IConnectConfigHop): void {
+    parent.forwardOut(
+      '127.0.0.1', LOCAL_FORWARD_PORT, config.host, config.port, (error, channel) => {
+        if (error) {
+          throw error;
+        }
+        config.sock = channel;
+        this._parent = parent;
+        super.connect(config);
+        this.on('ready', () => {
+          parent._childs.add(this);
+        });
+      }
+    );
+  }
+
+  public releaseParent(): false | SSHClient {
+    if (!this._parent) {
+      return false;
+    }
+    this._parent._justHop = false;
+
+    return this._parent;
+  }
+
+  private _internalOnClose(): void {
+    // close childs
+    this._childs.forEach(child => {
+      console.log('closing childs');
+      child.end();
     });
+
+    if (this._parent) {
+      // remove from parent
+      this._parent._childs.delete(this);
+
+      // close parent if this was the last child and the parent is just a hop parent
+      if (!this._parent._childs.size && this._parent._justHop) {
+        this._parent.end();
+      }
+    }
+
   }
 }
