@@ -3,7 +3,7 @@ import { Client, ConnectConfig } from 'ssh2';
 
 const LOCAL_FORWARD_PORT = 0;
 
-interface IConnectConfigHop extends ConnectConfig {
+export interface IConnectConfigHop extends ConnectConfig {
   through: IConnectConfigHop | ConnectConfig | SSHClient;
   host: string;
   port: number;
@@ -30,19 +30,28 @@ export class SSHClient extends Client {
     }
 
     if (config.through instanceof SSHClient) {
-      this.connectThrough(config.through, config);
+      this._connectThrough(config.through, config);
     } else {
       const parent = new SSHClient();
 
       parent._justHop = true;
       parent.connect(config.through);
       parent.on('ready', () => {
-        this.connectThrough(parent, config);
+        this._connectThrough(parent, config);
       });
     }
   }
 
-  public connectThrough(parent: SSHClient, config: IConnectConfigHop): void {
+  public releaseParent(): false | SSHClient {
+    if (!this._parent) {
+      return false;
+    }
+    this._parent._justHop = false;
+
+    return this._parent;
+  }
+
+  private _connectThrough(parent: SSHClient, config: IConnectConfigHop): void {
     parent.forwardOut(
       '127.0.0.1', LOCAL_FORWARD_PORT, config.host, config.port, (error, channel) => {
         if (error) {
@@ -58,14 +67,6 @@ export class SSHClient extends Client {
     );
   }
 
-  public releaseParent(): false | SSHClient {
-    if (!this._parent) {
-      return false;
-    }
-    this._parent._justHop = false;
-
-    return this._parent;
-  }
 
   private _internalOnClose(): void {
     // close childs
