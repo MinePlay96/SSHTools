@@ -1,16 +1,23 @@
 /* eslint-disable no-underscore-dangle */
-import { Client, ConnectConfig } from 'ssh2';
+import { Client, ClientChannel, ConnectConfig } from 'ssh2';
+import { SSHForward } from './SSHForward';
 
 const LOCAL_FORWARD_PORT = 0;
 
 export interface IConnectConfigHop extends ConnectConfig {
-  through: IConnectConfigHop | ConnectConfig | SSHClient;
+  through?: IConnectConfigHop | SSHClient;
   host: string;
   port: number;
+  tunnels?: Array<{
+    remotePort: number;
+    remoteHost: string;
+    localPort: number;
+  }>;
 }
 
 export class SSHClient extends Client {
 
+  private _tunnels: Set<SSHForward> = new Set<SSHForward>();
   private _parent?: SSHClient;
   private _childs: Set<SSHClient> = new Set<SSHClient>();
   private _justHop = false;
@@ -21,9 +28,19 @@ export class SSHClient extends Client {
     this.on('close', this._internalOnClose);
   }
 
-  public connect(config: IConnectConfigHop | ConnectConfig): void {
+  public connect(config: IConnectConfigHop): void {
 
-    if (!('through' in config)) {
+    const { tunnels } = config;
+
+    if (tunnels) {
+      this.on('ready', () => {
+        tunnels.forEach(tunnelConf => {
+          this.forwardPort(tunnelConf.localPort, tunnelConf.remoteHost, tunnelConf.remotePort);
+        });
+      });
+    }
+
+    if (!config.through) {
       super.connect(config);
 
       return;
@@ -51,6 +68,24 @@ export class SSHClient extends Client {
     return this._parent;
   }
 
+  public forwardPort(localPort: number, remoteAdress: string, remotePort: number): SSHForward {
+    return new SSHForward(this, this._tunnels, {
+      localPort,
+      remoteAdress,
+      remotePort
+    });
+  }
+
+  public forwardSocket(dstIP: string, dstPort: number, onConnection: (err: Error | undefined, channel: ClientChannel) => void): void {
+    this.forwardOut(
+      '', 0, dstIP, dstPort, onConnection
+    );
+  }
+
+  public getPortForwards(): Array<SSHForward> {
+    return [...this._tunnels];
+  }
+
   private _connectThrough(parent: SSHClient, config: IConnectConfigHop): void {
     parent.forwardOut(
       '127.0.0.1', LOCAL_FORWARD_PORT, config.host, config.port, (error, channel) => {
@@ -66,7 +101,6 @@ export class SSHClient extends Client {
       }
     );
   }
-
 
   private _internalOnClose(): void {
     // close childs
@@ -84,6 +118,5 @@ export class SSHClient extends Client {
         this._parent.end();
       }
     }
-
   }
 }

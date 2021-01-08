@@ -6,6 +6,7 @@ import { SSHForward } from './SSHForward';
 export class SSHConnection {
   private _connection: Client;
   private _parent?: SSHConnection;
+  private _tunnel: Set<SSHForward> = new Set();
 
   public constructor(connection: Client)
   public constructor(connection: Client, parent: SSHConnection)
@@ -14,11 +15,16 @@ export class SSHConnection {
     this._parent = parent;
   }
 
-  public close(): void {
+  public async close(): Promise<void> {
+
+    const tunnels = [...this._tunnel].map(async el => el.close());
+
+    await Promise.all(tunnels);
+
     this._connection.end();
 
     if (this._parent) {
-      this._parent.close();
+      await this._parent.close();
     }
   }
 
@@ -58,7 +64,13 @@ export class SSHConnection {
           .catch(reject);
       }).listen(localPort);
 
-      resolve(new SSHForward(server, connections));
+      const forward = new SSHForward(server, connections);
+
+      server.on('close', () => {
+        this._tunnel.delete(forward);
+      });
+      this._tunnel.add(forward);
+      resolve(forward);
     });
   }
 

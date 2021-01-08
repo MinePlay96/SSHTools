@@ -1,40 +1,39 @@
 const { SSHClient } = require('./dist/SSHClient');
+const fs = require('fs');
 
 const client1 = new SSHClient();
+const privateKey = fs.readFileSync('pathToPrivateKey');
 
 client1.connect({
-  host: '127.0.0.1',
+  host: 'main',
+  user: 'root',
+  privateKey,
   port: 22,
+  tunnels: [{
+    localPort: 443,
+    remoteHost: '127.0.0.1',
+    remotePort: 443
+  }],
   through: {
-    host: '127.0.0.1',
+    host: 'hop',
+    user: 'root',
+    privateKey,
     port: 22,
-    through: {
-      host: '127.0.0.1',
-      port: 22,
-    }
+    tunnels: [{
+      localPort: 444,
+      remoteHost: '127.0.0.1',
+      remotePort: 443
+    }]
   }
 });
 
+
 client1.on('ready', () => {
-  console.log('ready first');
-  const client2 = new SSHClient();
+  console.log(client1.getPortForwards());
+  const client2 = client1.releaseParent();
 
-  client2.connect({
-    host: '127.0.0.1',
-    port: 22,
-    through: client1
-  });
-  client2.on('ready', () => {
-    console.log('ready second');
-    setTimeout(() => {
-      console.log('action close client1');
-      client1.end();
-    }, 5000);
-  });
-  client2.on('close', () => {
-    console.log('client2 was closed');
-  });
-
-  const parent = client1.releaseParent();
+  if (client2) {
+    console.log(client2.getPortForwards());
+  }
 });
 
