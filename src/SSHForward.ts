@@ -6,7 +6,7 @@ export class SSHForward {
   private _siblings: Set<SSHForward>;
   private _owner: SSHClient;
   private _server: Server;
-  private _connections: Array<Socket> = [];
+  private _connections: Set<Socket> = new Set();
 
   public constructor(owner: SSHClient, siblings: Set<SSHForward>, {
     localPort,
@@ -28,11 +28,10 @@ export class SSHForward {
 
         serverStream.pipe(sshStream).pipe(serverStream);
 
-        // TODO: find a way without key
-        const key = this._connections.push(serverStream) - 1;
+        this._connections.add(serverStream);
 
         sshStream.on('close', () => {
-          delete this._connections[key];
+          this._connections.delete(serverStream);
         });
       });
     });

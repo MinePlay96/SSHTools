@@ -1,25 +1,35 @@
 {
   "name": "ssh-tools",
-  "version": "1.1.5",
+  "version": "1.1.7",
   "description": "",
   "main": "/dist/index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "files": [
-    "/dist/*"
-  ],
-  "typings": "./dist",
-  "keywords": [],
+  "types": "dist/main/index.d.ts",
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc"
+  },
   "devDependencies": {
     "@types/ssh2": "^0.5.46",
-    "eslint": "^7.15.0",
-    "eslint-config-strauss-cleanone-typescript": "^1.0.4",
-    "typescript": "^4.1.2"
+    "eslint": "^7.25.0",
+    "eslint-config-strauss-cleanone-typescript": "^1.1.1",
+    "typescript": "^4.2.4"
   },
   "dependencies": {
     "ssh2": "^0.8.9"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MinePlay96/SSHTools.git"
+  },
+  "keywords": [
+    "ssh",
+    "ssh2",
+    "sftp",
+    "secure",
+    "shell",
+    "exec",
+    "remote",
+    "client"
+  ]
 }

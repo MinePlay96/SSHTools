@@ -28,14 +28,15 @@ export class SSHClient extends Client {
     this.on('close', this._internalOnClose);
   }
 
+  // TODO: allow connect through socket
   public connect(config: IConnectConfigHop): void {
 
     const { tunnels } = config;
 
     if (tunnels) {
       this.on('ready', () => {
-        tunnels.forEach(tunnelConf => {
-          this.forwardPort(tunnelConf.localPort, tunnelConf.remoteHost, tunnelConf.remotePort);
+        tunnels.forEach(({ localPort, remoteHost, remotePort }) => {
+          this.forwardPort(localPort, remoteHost, remotePort);
         });
       });
     }
@@ -68,7 +69,11 @@ export class SSHClient extends Client {
     return this._parent;
   }
 
-  public forwardPort(localPort: number, remoteAdress: string, remotePort: number): SSHForward {
+  public forwardPort(
+      localPort: number,
+      remoteAdress: string,
+      remotePort: number
+  ): SSHForward {
     return new SSHForward(this, this._tunnels, {
       localPort,
       remoteAdress,
@@ -76,10 +81,12 @@ export class SSHClient extends Client {
     });
   }
 
-  public forwardSocket(dstIP: string, dstPort: number, onConnection: (err: Error | undefined, channel: ClientChannel) => void): void {
-    this.forwardOut(
-      '', 0, dstIP, dstPort, onConnection
-    );
+  public forwardSocket(
+      dstIP: string,
+      dstPort: number,
+      onConnection: (err: Error | undefined, channel: ClientChannel) => void
+  ): void {
+    this.forwardOut('', 0, dstIP, dstPort, onConnection);
   }
 
   public getPortForwards(): Array<SSHForward> {
@@ -88,7 +95,11 @@ export class SSHClient extends Client {
 
   private _connectThrough(parent: SSHClient, config: IConnectConfigHop): void {
     parent.forwardOut(
-      '127.0.0.1', LOCAL_FORWARD_PORT, config.host, config.port, (error, channel) => {
+      '127.0.0.1',
+      LOCAL_FORWARD_PORT,
+      config.host,
+      config.port,
+      (error, channel) => {
         if (error) {
           throw error;
         }
