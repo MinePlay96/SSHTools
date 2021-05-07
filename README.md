@@ -17,7 +17,7 @@
 
 # Installation
 
-    npm install ssh2-promise;
+    npm i ssh-tools
 
 # Differences 
 
