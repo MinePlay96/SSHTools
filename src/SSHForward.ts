@@ -21,19 +21,25 @@ export class SSHForward {
     this._siblings = siblings;
     this._owner = owner;
     this._server = createServer(serverStream => {
-      this._owner.forwardSocket(remoteAdress, remotePort, (err, sshStream) => {
-        if (err) {
-          throw err;
+      this._owner.forwardOut(
+        '127.0.0.1',
+        0,
+        remoteAdress,
+        remotePort,
+        (err, sshStream) => {
+          if (err) {
+            throw err;
+          }
+
+          serverStream.pipe(sshStream).pipe(serverStream);
+
+          this._connections.add(serverStream);
+
+          sshStream.on('close', () => {
+            this._connections.delete(serverStream);
+          });
         }
-
-        serverStream.pipe(sshStream).pipe(serverStream);
-
-        this._connections.add(serverStream);
-
-        sshStream.on('close', () => {
-          this._connections.delete(serverStream);
-        });
-      });
+      );
     });
 
     this._server.listen(localPort);

@@ -81,14 +81,6 @@ export class SSHClient extends Client {
     });
   }
 
-  public forwardSocket(
-      dstIP: string,
-      dstPort: number,
-      onConnection: (err: Error | undefined, channel: ClientChannel) => void
-  ): void {
-    this.forwardOut('', 0, dstIP, dstPort, onConnection);
-  }
-
   public getPortForwards(): Array<SSHForward> {
     return [...this._tunnels];
   }
