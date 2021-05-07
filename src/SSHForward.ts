@@ -29,11 +29,9 @@ export class SSHForward {
         serverStream.pipe(sshStream).pipe(serverStream);
 
         // TODO: find a way without key
-        // eslint-disable-next-line @typescript-eslint/no-magic-numbers
         const key = this._connections.push(serverStream) - 1;
 
         sshStream.on('close', () => {
-          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
           delete this._connections[key];
         });
       });
